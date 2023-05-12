@@ -4,6 +4,8 @@ import os
 import json
 import re
 from porter2stemmer import Porter2Stemmer
+import jsonhandling
+import sys
 import pickle
 '''
 This file is responsible for indexing the documents 
@@ -19,6 +21,7 @@ about each term's frequency.
 current_id = 0
 main_index = defaultdict(list)
 stemmer = Porter2Stemmer()
+file_number = 1
 
 class Posting:
     def __init__(self, docID: int, freq: int, posList: list[int], title: bool, bold: bool, header: bool):
@@ -98,8 +101,13 @@ if __name__=='__main__':
     for subdir, dirs, files in os.walk('./developer/DEV'):
         for file in files:
             indexFile(subdir + '/' + file)
-    print(main_index)
-    f = open('index.json', 'wb')
-    f.write(main_index)
+            if(current_id % 5000 == 0):
+                jsonhandling.dumpToJson(main_index, file_number)
+                main_index = defaultdict(list)
+                file_number += 1
+            current_id += 1
+    jsonhandling.merge()
+
+
 
 
