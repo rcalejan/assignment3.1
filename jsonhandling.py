@@ -39,80 +39,92 @@ def merge():
         file = os.path.join('./dumps', file)
         dump = open(file, 'rb')
         partial_index = pickle.load(dump)
-        partial_1 = dict()
-        partial_2 = dict()
-        partial_3 = dict()
-        partial_4 = dict()
-        partial_5 = dict()
-        for k, v in partial_index.items():
-            if k[0] >= 'a' and k[0] <= 'e':
-                partial_1[k] = v
-            elif k[0] >= 'f' and k[0] <= 'j':
-                partial_2[k] = v
-            elif k[0] >= 'k' and k[0] <= 'o':
-                partial_3[k] = v
-            elif k[0] >= 'p' and k[0] <= 's':
-                partial_4[k] = v
-            else:
-                partial_5[k] = v
-        del partial_index
 
         pickle_1_r = open('./masterIndex/index1.pickle', 'rb')
         try:
             index1 = pickle.load(pickle_1_r)
-            index1.update(partial_1)
         except EOFError:
             index1 = dict()
-        pickle_1_r.close()
-
-        pickle_1_w = open('./masterIndex/index1.pickle', 'wb')
-        pickle.dump(index1, pickle_1_w, pickle.HIGHEST_PROTOCOL)
-        del index1
 
         pickle_2_r = open('./masterIndex/index2.pickle', 'rb')
         try:
             index2 = pickle.load(pickle_2_r)
-            index2.update(partial_2)
         except EOFError:
             index2 = dict()
-        pickle_2_r.close()
-
-        pickle_2_w = open('./masterIndex/index2.pickle', 'wb')
-        pickle.dump(index2, pickle_2_w, pickle.HIGHEST_PROTOCOL)
-        del index2
 
         pickle_3_r = open('./masterIndex/index3.pickle', 'rb')
         try:
             index3 = pickle.load(pickle_3_r)
-            index3.update(partial_3)
         except EOFError:
             index3 = dict()
-        pickle_3_r.close()
-
-        pickle_3_w = open('./masterIndex/index3.pickle', 'wb')
-        pickle.dump(index3, pickle_3_w, pickle.HIGHEST_PROTOCOL)
-        del index3
 
         pickle_4_r = open('./masterIndex/index4.pickle', 'rb')
         try:
             index4 = pickle.load(pickle_4_r)
-            index4.update(partial_4)
         except EOFError:
             index4 = dict()
-        pickle_4_r.close()
-
-        pickle_4_w = open('./masterIndex/index4.pickle', 'wb')
-        pickle.dump(index4, pickle_4_w, pickle.HIGHEST_PROTOCOL)
-        del index4
 
         pickle_5_r = open('./masterIndex/index5.pickle', 'rb')
         try:
             index5 = pickle.load(pickle_5_r)
-            index5.update(partial_5)
         except EOFError:
             index5 = dict()
+
+        for k, v in partial_index.items():
+            if k[0] >= 'a' and k[0] <= 'e':
+                if k in index1:
+                    index1[k].extend(v)
+                else:
+                    index1[k] = v
+            elif k[0] >= 'f' and k[0] <= 'j':
+                if k in index2:
+                    index2[k].extend(v)
+                else:
+                    index2[k] = v
+            elif k[0] >= 'k' and k[0] <= 'o':
+                if k in index3:
+                    index3[k].extend(v)
+                else:
+                    index3[k] = v
+            elif k[0] >= 'p' and k[0] <= 's':
+                if k in index4:
+                    index4[k].extend(v)
+                else:
+                    index4[k] = v
+            else:
+                if k in index5:
+                    index5[k].extend(v)
+                else:
+                    index5[k] = v
+        del partial_index
+
+        pickle_1_r.close()
+        pickle_2_r.close()
+        pickle_3_r.close()
+        pickle_4_r.close()
         pickle_5_r.close()
+
+        pickle_1_w = open('./masterIndex/index1.pickle', 'wb')
+        pickle.dump(index1, pickle_1_w, pickle.HIGHEST_PROTOCOL)
+        pickle_1_w.close()
+        del index1
+
+        pickle_2_w = open('./masterIndex/index2.pickle', 'wb')
+        pickle.dump(index2, pickle_2_w, pickle.HIGHEST_PROTOCOL)
+        pickle_2_w.close()
+        del index2
+
+        pickle_3_w = open('./masterIndex/index3.pickle', 'wb')
+        pickle.dump(index3, pickle_3_w, pickle.HIGHEST_PROTOCOL)
+        pickle_3_w.close()
+        del index3
+
+        pickle_4_w = open('./masterIndex/index4.pickle', 'wb')
+        pickle.dump(index4, pickle_4_w, pickle.HIGHEST_PROTOCOL)
+        pickle_4_w.close()
+        del index4
 
         pickle_5_w = open('./masterIndex/index5.pickle', 'wb')
         pickle.dump(index5, pickle_5_w, pickle.HIGHEST_PROTOCOL)
+        pickle_5_w.close()
         del index5

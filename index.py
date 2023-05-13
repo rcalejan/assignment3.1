@@ -106,6 +106,8 @@ if __name__=='__main__':
                 main_index = defaultdict(list)
                 file_number += 1
             current_id += 1
+    print(current_id)
+    jsonhandling.dumpToJson(main_index, file_number)
     jsonhandling.merge()
 
 
