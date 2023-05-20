@@ -6,13 +6,13 @@ holding all the delicious inverted index information from a directory
 import json
 import pickle
 from json import JSONEncoder
-from index import Posting
 import os
 current_file = 1
 
 def dumpToJson(index, number):
     with open(f'dumps/dump{number}.pickle', 'wb') as dump_file:
         pickle.dump(index, dump_file, pickle.HIGHEST_PROTOCOL)
+
 
 
 def merge():

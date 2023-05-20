@@ -4,7 +4,7 @@ import os
 import json
 import re
 from porter2stemmer import Porter2Stemmer
-import jsonhandling
+from jsonhandling import dumpToJson, merge
 import sys
 import pickle
 '''
@@ -22,6 +22,7 @@ current_id = 0
 main_index = defaultdict(list)
 stemmer = Porter2Stemmer()
 file_number = 1
+file_finder = dict()
 
 class Posting:
     def __init__(self, docID: int, freq: int, posList: list[int], title: bool, bold: bool, header: bool):
@@ -102,13 +103,14 @@ if __name__=='__main__':
         for file in files:
             indexFile(subdir + '/' + file)
             if(current_id % 5000 == 0):
-                jsonhandling.dumpToJson(main_index, file_number)
+                dumpToJson(main_index, file_number)
                 main_index = defaultdict(list)
                 file_number += 1
+            file_finder[current_id] = (subdir + '/' + file)
             current_id += 1
     print(current_id)
-    jsonhandling.dumpToJson(main_index, file_number)
-    jsonhandling.merge()
+    dumpToJson(main_index, file_number)
+    merge()
 
 
 

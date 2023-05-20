@@ -1,6 +1,9 @@
-from index import tokenize
+import index as indexer
 from collections import defaultdict
-
+import pickle
+import os
+import index
+from index import Posting
 '''
 This is where the ranking algorithm goes.
 Look into tf-idf ranking
@@ -11,6 +14,8 @@ Look into tf-idf ranking
 # Put each posting object into a dictionary with key as document_id and value as list containing Posting object
 #
 
+current_id = 0
+file_finder = dict()
 stop_words = [
     'a', 'about', 'above', 'after', 'again', 'against', 'all', 'am', 'an', 'any', 'are', "aren't", 'as', 'at',
     'be', 'because', 'been', 'before', 'being', 'below', 'between', 'both', 'but', 'by', "can't", 'cannot', 'could',
@@ -28,22 +33,46 @@ stop_words = [
     "you've", 'your', 'yours', 'yourself', 'yourselves'
 ]
 
-# stem the query 
+def dumpFileFinder(file_finder):
+    with open(f'finder/finder.pickle', 'wb') as dump_file:
+        pickle.dump(file_finder, dump_file, pickle.HIGHEST_PROTOCOL)
+# stem the query
 def askUser():
     print("==========  Welcome to GHoogle!  ==========\n")
     query = input("What do you want to know?: ")
+    return query
 
 
 def tokenizeQuery(content):
     fileDict = defaultdict(list)
-    tokens = tokenize(content)
+    tokens = index.tokenize(content)
     for token in tokens:
         files = []
         if token not in stop_words:
-            pass
-        #     TODO - files = getFiles(token)
-        # for file in files:    
-        #     fileDict[file.docID].append(file)
+            files = getFiles(token)
+        for file in files:
+            fileDict[file.docID].append(file)
+    return fileDict
+
+def getFiles(token):
+    index = None
+    if token[0] >= 'a' and token[0] <= 'e':
+        pickle_data = open('./masterIndex/index1.pickle', 'rb')
+        index = pickle.load(pickle_data)
+    elif token[0] >= 'f' and token[0] <= 'j':
+        pickle_data = open('./masterIndex/index2.pickle', 'rb')
+        index = pickle.load(pickle_data)
+    elif token[0] >= 'k' and token[0] <= 'o':
+        pickle_data = open('./masterIndex/index3.pickle', 'rb')
+        index = pickle.load(pickle_data)
+    elif token[0] >= 'p' and token[0] <= 's':
+        pickle_data = open('./masterIndex/index4.pickle', 'rb')
+        index = pickle.load(pickle_data)
+    else:
+        pickle_data = open('./masterIndex/index5.pickle', 'rb')
+        index = pickle.load(pickle_data)
+    return index[token]
+
 
 def rankFiles(fileDict):
     def sumFrequencies(docID):
@@ -51,10 +80,18 @@ def rankFiles(fileDict):
         for posting in fileDict[docID]:
             sum += posting.freq
         return sum
-    ranked = sorted(fileDict.keys(), lambda x: -sumFrequencies(x))
+    ranked = sorted(fileDict.keys(), key=lambda x: -sumFrequencies(x))
     return ranked
 
 if __name__ == '__main__':
     query = askUser()
-    tokens = tokenizeQuery(query)
-    print(tokens)
+    fileDict = tokenizeQuery(query)
+    ranked_files = rankFiles(fileDict)
+    file_finder_f = open('./finder/finder.pickle', 'rb')
+    file_finder = pickle.load(file_finder_f)
+    count = 0
+    for file in ranked_files:
+        if count == 5:
+            break
+        print(file_finder[file])
+        count += 1
