@@ -5,17 +5,32 @@ holding all the delicious inverted index information from a directory
 
 import json
 import pickle
-from json import JSONEncoder
 import os
+import datetime
+
+###################################################################
+#                          Constants                              #
+###################################################################
 current_file = 1
 
-def dumpToJson(index, number):
+###################################################################
+#                          Functions                              #
+###################################################################
+
+def dumpToPickle(index: dict[str, list], number: int) -> None:
+    """Dump dictionary to pickle file."""
     with open(f'dumps/dump{number}.pickle', 'wb') as dump_file:
         pickle.dump(index, dump_file, pickle.HIGHEST_PROTOCOL)
 
 
+def postingToList(posting: object) -> list:
+    """Return posting as list for serialization"""
+    return [posting.docID, posting.freq, posting.posList, posting.title, posting.bold, posting.header]
 
-def merge():
+
+def merge() -> None:
+    """Merges all dumped pickle files into 5 masterIndexes."""
+
     '''
     RANGES
     1: a-e
@@ -24,107 +39,75 @@ def merge():
     4: p-s
     5: t-z + other
     '''
-    result = list()
-    file1 = open('masterIndex/index1.pickle', 'wb')
-    file1.close()
-    file2 = open('masterIndex/index2.pickle', 'wb')
-    file2.close()
-    file3 = open('masterIndex/index3.pickle', 'wb')
-    file3.close()
-    file4 = open('masterIndex/index4.pickle', 'wb')
-    file4.close()
-    file5 = open('masterIndex/index5.pickle', 'wb')
-    file5.close()
-    for file in os.listdir('./dumps'):
-        file = os.path.join('./dumps', file)
-        dump = open(file, 'rb')
-        partial_index = pickle.load(dump)
 
-        pickle_1_r = open('./masterIndex/index1.pickle', 'rb')
-        try:
-            index1 = pickle.load(pickle_1_r)
-        except EOFError:
-            index1 = dict()
+    for master_index in range(5):
+        print(f"{datetime.datetime.now()}: Master Index: {master_index}")
+        new_partial_index = {}
+        for index, file in enumerate(os.listdir('./dumps')):
+            print(f'\t{datetime.datetime.now()}: Dump: {index}')
+            file = os.path.join('./dumps', file)
+            dump = open(file, 'rb')
+            partial_index = pickle.load(dump)
+            match master_index:
+                case 0:
+                    for k, v in partial_index.items():
+                        if k[0] >= 'a' and k[0] <= 'e':
+                            if k in new_partial_index:
+                                new_partial_index[k].extend(v)
+                            else:
+                                new_partial_index[k] = v
+                case 1:
+                    for k, v in partial_index.items():
+                        if k[0] >= 'f' and k[0] <= 'j':
+                            if k in new_partial_index:
+                                new_partial_index[k].extend(v)
+                            else:
+                                new_partial_index[k] = v
+                case 2:
+                    for k, v in partial_index.items():
+                        if k[0] >= 'k' and k[0] <= 'o':
+                            if k in new_partial_index:
+                                new_partial_index[k].extend(v)
+                            else:
+                                new_partial_index[k] = v
+                case 3:
+                    for k, v in partial_index.items():
+                        if k[0] >= 'p' and k[0] <= 's':
+                            if k in new_partial_index:
+                                new_partial_index[k].extend(v)
+                            else:
+                                new_partial_index[k] = v
+                case 4:
+                    for k, v in partial_index.items():
+                        if k[0] > 's':
+                            if k in new_partial_index:
+                                new_partial_index[k].extend(v)
+                            else:
+                                new_partial_index[k] = v
 
-        pickle_2_r = open('./masterIndex/index2.pickle', 'rb')
-        try:
-            index2 = pickle.load(pickle_2_r)
-        except EOFError:
-            index2 = dict()
+        with open(f'./masterIndex/index{master_index}.json', 'w') as json_file:
+            print(f"{datetime.datetime.now()} Started Dump")
+            json.dump(new_partial_index, json_file, default=postingToList)
+            print(f"{datetime.datetime.now()} Ended Dump")
 
-        pickle_3_r = open('./masterIndex/index3.pickle', 'rb')
-        try:
-            index3 = pickle.load(pickle_3_r)
-        except EOFError:
-            index3 = dict()
 
-        pickle_4_r = open('./masterIndex/index4.pickle', 'rb')
-        try:
-            index4 = pickle.load(pickle_4_r)
-        except EOFError:
-            index4 = dict()
-
-        pickle_5_r = open('./masterIndex/index5.pickle', 'rb')
-        try:
-            index5 = pickle.load(pickle_5_r)
-        except EOFError:
-            index5 = dict()
-
-        for k, v in partial_index.items():
-            if k[0] >= 'a' and k[0] <= 'e':
-                if k in index1:
-                    index1[k].extend(v)
-                else:
-                    index1[k] = v
-            elif k[0] >= 'f' and k[0] <= 'j':
-                if k in index2:
-                    index2[k].extend(v)
-                else:
-                    index2[k] = v
-            elif k[0] >= 'k' and k[0] <= 'o':
-                if k in index3:
-                    index3[k].extend(v)
-                else:
-                    index3[k] = v
-            elif k[0] >= 'p' and k[0] <= 's':
-                if k in index4:
-                    index4[k].extend(v)
-                else:
-                    index4[k] = v
-            else:
-                if k in index5:
-                    index5[k].extend(v)
-                else:
-                    index5[k] = v
-        del partial_index
-
-        pickle_1_r.close()
-        pickle_2_r.close()
-        pickle_3_r.close()
-        pickle_4_r.close()
-        pickle_5_r.close()
-
-        pickle_1_w = open('./masterIndex/index1.pickle', 'wb')
-        pickle.dump(index1, pickle_1_w, pickle.HIGHEST_PROTOCOL)
-        pickle_1_w.close()
-        del index1
-
-        pickle_2_w = open('./masterIndex/index2.pickle', 'wb')
-        pickle.dump(index2, pickle_2_w, pickle.HIGHEST_PROTOCOL)
-        pickle_2_w.close()
-        del index2
-
-        pickle_3_w = open('./masterIndex/index3.pickle', 'wb')
-        pickle.dump(index3, pickle_3_w, pickle.HIGHEST_PROTOCOL)
-        pickle_3_w.close()
-        del index3
-
-        pickle_4_w = open('./masterIndex/index4.pickle', 'wb')
-        pickle.dump(index4, pickle_4_w, pickle.HIGHEST_PROTOCOL)
-        pickle_4_w.close()
-        del index4
-
-        pickle_5_w = open('./masterIndex/index5.pickle', 'wb')
-        pickle.dump(index5, pickle_5_w, pickle.HIGHEST_PROTOCOL)
-        pickle_5_w.close()
-        del index5
+def createFinalIndex() -> None:
+    """Merge all master indexes into final Indexes while creating location indexes for each final index."""
+    for master_index in range(5):
+        print(f"Working on index: {master_index}")
+        with open(f'./masterIndex/index{master_index}.json', 'r') as json_file:
+            partial_index = json.load(json_file)
+        print("\tLoaded partial index from masterIndex")
+        print("\tCreating final_index and index_index...")
+        with open(f'finalIndex/index{master_index}.json', 'w') as final_index_file:
+            index_dict = {}
+            for token, postingsList in partial_index.items():
+                start_postion = final_index_file.tell()
+                json.dump({token:postingsList}, final_index_file)
+                end_position = final_index_file.tell()
+                index_dict[token] = (start_postion, end_position)
+        print("\tFinished")
+        with open(f'./indexIndex/index{master_index}.pickle', 'wb') as index_file:
+            pickle.dump(index_dict, index_file, pickle.HIGHEST_PROTOCOL)
+        print("\tSaved index_index")
+        print("\tComplete")
