@@ -11,7 +11,7 @@ Look into tf-idf ranking
 
 # for each word in the query
 # get list of Postings
-# Put each posting object into a dictionary with key as document_id and value as list containing Posting object
+# Put each posting object into a dictionary with key as document_id and value as list containing Posting object.
 #
 
 current_id = 0
