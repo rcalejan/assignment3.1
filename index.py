@@ -17,6 +17,7 @@ from tqdm import tqdm
 from zlib import crc32
 import datetime
 from urllib.parse import urljoin
+from glob import glob
 import time
 import sys
 import pickle
@@ -29,6 +30,8 @@ main_index = defaultdict(list)
 stemmer = Porter2Stemmer()
 file_number = 1
 sim_hashes = {}
+DOCUMENT_PATHS = [file for dir in os.walk('developer/DEV') for file in glob(os.path.join(dir[0], '*.json'))]
+
 
 ###################################################################
 #                           Classes                               #
@@ -52,19 +55,33 @@ class Posting:
 class Graph:
     """Graph of entire courpus."""
     def __init__(self) -> None:
-        self.nodes = []
+        self.nodes = {}
+    
+
+    def addNode(self, hashed_url:int, node:object):
+        self.nodes[hashed_url] = node
 
 
-    def set_parents(self) -> None:
-        for node in self.nodes:
-            for child in node.children:
-                self.nodes[child].parent.append()
+    def convertUrlsToNodes(self) -> None:
+        for node in self.nodes.values():
+            for child in node.children_urls:
+                if child in self.nodes:
+                    self.nodes[child].parents.append(node)
+        for node in self.nodes.values():
+            for parent in node.parents:
+                parent.children.append(node)
+
 
     def runHits(self):
         for node in self.nodes:
             node.updateAuthority()
         for node in self.nodes:
             node.updateHub()
+
+
+    def runPageRank(self, d):
+        for node in self.nodes.values():
+            node.updatePageRank(d, len(self.nodes))
 
 
     def normalize_nodes(self) -> None:
@@ -78,13 +95,15 @@ class Graph:
 
 class Node:
     """Node representation of document in corupus."""
-    def __init__(self, hashed_url: int) -> None:
+    def __init__(self, hashed_url: int, docID: int) -> None:
         self.url = hashed_url
+        self.children_urls = []
         self.children = []
         self.parents = []
         self.authority = 1.0
         self.hub = 1.0
         self.page_rank = 1.0
+        self.docID = docID
 
 
     def updateAuthority(self):
@@ -98,7 +117,7 @@ class Node:
     def updatePageRank(self, damping_factor, n):
         pagerank_sum = sum((node.page_rank / len(node.children)) for node in self.parents)
         random_walk = damping_factor / n
-        self.page_rank = random_walk + (1 - d) * pagerank_sum
+        self.page_rank = random_walk + (1 - damping_factor) * pagerank_sum
 
 
 ###################################################################
@@ -183,7 +202,15 @@ def saveHashes(index: dict[str, list]) -> None:
         print(f"{datetime.datetime.now()} Finished Saving Hash Index")
 
 
-def indexFile(file):
+def savePageRanks(index: dict[str, list]) -> None:
+    """Dump hash dictionary to json file."""
+    with open(f'./pageRanks/pageRankIndex.json', 'w') as json_file:
+        print(f"{datetime.datetime.now()} Started Saving Page Ranks")
+        json.dump(index, json_file)
+        print(f"{datetime.datetime.now()} Finished Saving Page Ranks")
+
+
+def indexFile(file: str):
     """Reads content of file, tokenizes it, creates posting, and adds posting to main index."""
     with open(file) as json_file:
         file_data = json.load(json_file)
@@ -228,11 +255,11 @@ def indexFile(file):
 
         sim_hashes[current_id] = simHash(frequencies)
 
-        node = Node(hash(file_data['url']))
+        node = Node(hash(file_data['url']), current_id)
         for link in soup.find_all('a'): # Iterate thorugh a tags in soup
             if link and link.get('href'): # Get url from link
-                node.children.append(hash(urljoin(file_data['url'], link.get('href')))) # Convert relative url to absolute url and append it to links list
-        webGraph.nodes.append(node)
+                node.children_urls.append(hash(urljoin(file_data['url'], link.get('href')))) # Convert relative url to absolute url and append it to links list
+        webGraph.addNode(node.url, node)
 
 ###################################################################
 #                             Main                                #
@@ -240,7 +267,9 @@ def indexFile(file):
 
 if __name__=='__main__':
     webGraph = Graph()
-    for subdir, dirs, files in os.walk('./developer/DEV'):
+    for index, (subdir, dirs, files) in enumerate(os.walk('./developer/DEV')):
+        if index > 7:
+            break
         print(subdir)
         for file in tqdm(files):
             indexFile(subdir + '/' + file)
@@ -249,6 +278,12 @@ if __name__=='__main__':
                 main_index = defaultdict(list)
                 file_number += 1
             current_id += 1
+    webGraph.convertUrlsToNodes()
+    for i in range(5):
+        print(f"{datetime.datetime.now()} Started PageRank Iteration {i} of 5")
+        webGraph.runPageRank(0.85)
+        print(f"{datetime.datetime.now()} Finished Iteration")
+    savePageRanks({node.docID:node.page_rank for node in webGraph.nodes.values()})
     print(current_id)
     dumpToPickle(main_index, file_number)
     saveHashes(sim_hashes)
