@@ -14,6 +14,9 @@ import re
 from porter2stemmer import Porter2Stemmer
 from jsonhandling import dumpToPickle, merge, createFinalIndex
 from tqdm import tqdm
+from zlib import crc32
+import datetime
+from urllib.parse import urljoin
 import time
 import sys
 import pickle
@@ -25,6 +28,7 @@ current_id = 0
 main_index = defaultdict(list)
 stemmer = Porter2Stemmer()
 file_number = 1
+sim_hashes = {}
 
 ###################################################################
 #                           Classes                               #
@@ -43,6 +47,58 @@ class Posting:
     def toList(self) -> list:
         """Returns posting as list for serialization."""
         return [self.docID, self.freq, self.posList, self.title, self.bold, self.header]
+    
+
+class Graph:
+    """Graph of entire courpus."""
+    def __init__(self) -> None:
+        self.nodes = []
+
+
+    def set_parents(self) -> None:
+        for node in self.nodes:
+            for child in node.children:
+                self.nodes[child].parent.append()
+
+    def runHits(self):
+        for node in self.nodes:
+            node.updateAuthority()
+        for node in self.nodes:
+            node.updateHub()
+
+
+    def normalize_nodes(self) -> None:
+        authority_sum = sum(node.auth for node in self.nodes)
+        hub_sum = sum(node.hub for node in self.nodes)
+        for node in self.nodes:
+            node.authority /= authority_sum
+            node.hub /= hub_sum
+    
+
+
+class Node:
+    """Node representation of document in corupus."""
+    def __init__(self, hashed_url: int) -> None:
+        self.url = hashed_url
+        self.children = []
+        self.parents = []
+        self.authority = 1.0
+        self.hub = 1.0
+        self.page_rank = 1.0
+
+
+    def updateAuthority(self):
+        self.auth = sum(node.hub for node in self.parents)
+
+
+    def updateHub(self):
+        self.hub = sum(node.auth for node in self.children)
+
+
+    def updatePageRank(self, damping_factor, n):
+        pagerank_sum = sum((node.page_rank / len(node.children)) for node in self.parents)
+        random_walk = damping_factor / n
+        self.page_rank = random_walk + (1 - d) * pagerank_sum
 
 
 ###################################################################
@@ -95,6 +151,38 @@ def tokenize(file_content) -> list[str]:
     return tokens
 
 
+def simHash(tokens: dict[str:int]) -> int:
+    """Returns simhash value of tokenized words.
+       Uses crc32."""
+    
+    # Initialize 32 bit vector
+    vector = [0 for i in range(32)]
+    num_bits = 32
+
+    # Update vector for each word
+    for key, value in tokens.items(): # Iterate through words and their counts
+        value = value[0]
+        hashed_value = crc32(bytes(key, 'utf-8')) # Compute 32 bit hash value for word
+        bits = [(hashed_value >> bit) & 1 for bit in range(num_bits - 1, -1, -1)] # Convert integer hash value to list of binary digits
+        for index, bit in enumerate(bits): # Iterate through bianry digits
+            if bit == 1:
+                vector[index] += value # If binary digit is 1 then add word count to vector position of binary digit
+            elif bit == 0:
+                vector[index] -= value # If binary digit is 1 then subtract word count to vector position of binary digit
+    
+    binary_list = [1 if value >=0 else 0 for value in vector] # Convert vector into binary.  1 if vector[i] is positive. 0 Otherwise.
+    integer = int("".join(str(x) for x in binary_list), 2) # Convert binary to integer
+    return integer # Return integer representation of hashed value
+
+
+def saveHashes(index: dict[str, list]) -> None:
+    """Dump hash dictionary to json file."""
+    with open(f'./docHashes/hashIndex.json', 'w') as json_file:
+        print(f"{datetime.datetime.now()} Started Saving Hash Index")
+        json.dump(index, json_file)
+        print(f"{datetime.datetime.now()} Finished Saving Hash Index")
+
+
 def indexFile(file):
     """Reads content of file, tokenizes it, creates posting, and adds posting to main index."""
     with open(file) as json_file:
@@ -138,12 +226,20 @@ def indexFile(file):
                 isHeader = True
             main_index[token].append((current_id, freq, positions, isTitle, isBold, isHeader))
 
+        sim_hashes[current_id] = simHash(frequencies)
+
+        node = Node(hash(file_data['url']))
+        for link in soup.find_all('a'): # Iterate thorugh a tags in soup
+            if link and link.get('href'): # Get url from link
+                node.children.append(hash(urljoin(file_data['url'], link.get('href')))) # Convert relative url to absolute url and append it to links list
+        webGraph.nodes.append(node)
 
 ###################################################################
 #                             Main                                #
 ###################################################################
 
 if __name__=='__main__':
+    webGraph = Graph()
     for subdir, dirs, files in os.walk('./developer/DEV'):
         print(subdir)
         for file in tqdm(files):
@@ -155,5 +251,6 @@ if __name__=='__main__':
             current_id += 1
     print(current_id)
     dumpToPickle(main_index, file_number)
+    saveHashes(sim_hashes)
     merge()
     createFinalIndex()
