@@ -56,7 +56,8 @@ def load_index(index_num: int) -> dict[str, int]:
 
 
 def start_up() -> list[dict[str, int]]:
-    """Loads each location index and returns them."""
+    """Loads each location, pageRank, and simHash indexes and returns them."""
+    # Load Location Indexes
     print("Loading Location Indexes from indexIndex...")
     location_index_0 = load_index(0)
     print("\tLoaded location index 1 of 5")
@@ -68,7 +69,20 @@ def start_up() -> list[dict[str, int]]:
     print("\tLoaded location index 4 of 5")
     location_index_4 = load_index(4)
     print("\tLoaded location index 5 of 5")
-    return location_index_0, location_index_1, location_index_2, location_index_3, location_index_4
+
+    # Load PageRank dictinoary
+    print("Loading PageRanks Index...")
+    with open(f'./pageRanks/pageRankIndex.json', 'r') as json_file:
+        page_rank_index = json.load(json_file)
+    print("\tFinished")
+    
+    # Load simHash dictionary
+    print("Loading simHash Index...")
+    with open(f'./docHashes/hashIndex.json', 'r') as json_file:
+        sim_hash_index = json.load(json_file)
+    print("\tFinished")
+    
+    return location_index_0, location_index_1, location_index_2, location_index_3, location_index_4, page_rank_index, sim_hash_index
 
 
 def askUser()->str:
@@ -115,10 +129,11 @@ def filterNGramPostings(postings, distance, first_word, second_word):
 def getNGramPostings(nGrams, postings):
     """Get postings for each n gram"""
     nGramPostings = {}
-    for nGram in nGrams:
-        distance, first_word, second_word = nGram
-        combined_postings = getCombinedPostings(first_word, second_word, postings)
-        nGramPostings[nGram] = filterNGramPostings(combined_postings, distance, first_word, second_word)
+    if nGrams:
+        for nGram in nGrams:
+            distance, first_word, second_word = nGram
+            combined_postings = getCombinedPostings(first_word, second_word, postings)
+            nGramPostings[nGram] = filterNGramPostings(combined_postings, distance, first_word, second_word)
     return nGramPostings
         
 
@@ -160,8 +175,9 @@ def computeQueryFrequencies(tokens: list[str], nGrams: list[tuple[int, str, str]
     for token in tokens:
         frequencies[token] += 1
     nGramFrequencies = defaultdict(int)
-    for nGram in nGrams:
-        nGramFrequencies[nGram] += 1
+    if nGrams:
+        for nGram in nGrams:
+            nGramFrequencies[nGram] += 1
     return frequencies, nGramFrequencies
 
 
@@ -170,19 +186,23 @@ def calculateQueryNormalizedTfIdf(query_tokens: list[str], postings: list[list],
 
     # Calculate tf-wt
     query_tf_wt = {}
-    tokens = set(query_token for query_token in query_tokens if query_token in postings)
+    tokens = set(query_token for query_token in query_tokens if query_token in postings and postings[query_token])
     for token in tokens:
         query_tf_wt[token] = 1 + math.log(frequencies[token], 10)
 
     # Calcualte idf
     query_idf = {}
     for token in tokens:
-        idf = math.log(NUMBER_OF_FILES/len(postings[token]), 10)
-        print(f"Token: {token} idf: {idf}")
-        if idf > QUERY_IDF_THRESHOLD:
-            query_idf[token] = idf
-        else:
-            print(f"Excluding query term \"{token}\" becasue it's idf was too small.")
+        try:
+            idf = math.log(NUMBER_OF_FILES/len(postings[token]), 10)
+            print(f"Token: {token} idf: {idf}")
+            if idf > QUERY_IDF_THRESHOLD:
+                query_idf[token] = idf
+            else:
+                print(f"Excluding query term \"{token}\" becasue it's idf was too small.")
+        except:
+            print(f"TOKEN: {token}")
+            print(f"POSITNGS: {postings}")
 
     # Claculate tf-idf
     query_weights = {}
@@ -196,32 +216,35 @@ def calculateQueryNormalizedTfIdf(query_tokens: list[str], postings: list[list],
         query_normalized_scores[token] = weight/query_normalization_length
 
     # Calculate tf-wt for nGrams
-    query_tf_wt = {}
-    nGrams = [nGram for nGram, posting_list in nGramPostings.items() if posting_list]
-    for nGram in nGrams:
-        query_tf_wt[nGram] = 1 + math.log(nGramFrequencies[nGram], 10)
+    if nGrams:
+        query_tf_wt = {}
+        nGrams = [nGram for nGram, posting_list in nGramPostings.items() if posting_list]
+        for nGram in nGrams:
+            query_tf_wt[nGram] = 1 + math.log(nGramFrequencies[nGram], 10)
 
-    # Calcualte idf for nGrams
-    query_idf = {}
-    for nGram in nGrams:
-        idf = math.log(NUMBER_OF_FILES/len(nGramPostings[nGram]), 10)
-        print(f"Token: {nGram} idf: {idf}")
-        if idf > QUERY_IDF_THRESHOLD:
-            query_idf[nGram] = idf
-        else:
-            print(f"Excluding query term \"{nGram}\" becasue it's idf was too small.")
+        # Calcualte idf for nGrams
+        query_idf = {}
+        for nGram in nGrams:
+            idf = math.log(NUMBER_OF_FILES/len(nGramPostings[nGram]), 10)
+            print(f"Token: {nGram} idf: {idf}")
+            if idf > QUERY_IDF_THRESHOLD:
+                query_idf[nGram] = idf
+            else:
+                print(f"Excluding query term \"{nGram}\" becasue it's idf was too small.")
 
-    # Claculate tf-idf for nGrams
-    query_weights = {}
-    for token in query_idf.keys():
-        query_weights[token] = query_tf_wt[token] * query_idf[token]
+        # Claculate tf-idf for nGrams
+        query_weights = {}
+        for token in query_idf.keys():
+            query_weights[token] = query_tf_wt[token] * query_idf[token]
 
-    # Normalize tf-idf for nGrams
-    query_nGram_normalized_scores = {}
-    query_normalization_length = math.sqrt(sum([i**2 for i in query_weights.values()]))
-    for token, weight in query_weights.items():
-        query_nGram_normalized_scores[token] = weight/query_normalization_length
-    
+        # Normalize tf-idf for nGrams
+        query_nGram_normalized_scores = {}
+        query_normalization_length = math.sqrt(sum([i**2 for i in query_weights.values()]))
+        for token, weight in query_weights.items():
+            query_nGram_normalized_scores[token] = weight/query_normalization_length
+    else:
+        query_nGram_normalized_scores = {}
+
     return query_normalized_scores, query_nGram_normalized_scores
 
 
@@ -340,7 +363,7 @@ def getTopKUrls(documents: list[tuple[int, int]], k: int) -> list[tuple[int, str
 if __name__ == '__main__':
     # Load location indexes into memory
     print("Starting Up")
-    location_index_0, location_index_1, location_index_2, location_index_3, location_index_4 = start_up()
+    location_index_0, location_index_1, location_index_2, location_index_3, location_index_4, page_rank_index, sim_hash_index = start_up()
     print("Done")
 
     # Start search engine loop in command line
