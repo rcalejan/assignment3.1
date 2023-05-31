@@ -1,4 +1,4 @@
-import index as indexer
+from index import singleTokenize, nGramTokenize, Graph, Node
 from collections import defaultdict
 import pickle
 import os
@@ -24,6 +24,9 @@ BOLD_VALUE = 5
 TITLE_VALUE = 20
 HEADER_VALUE = 10
 QUERY_IDF_THRESHOLD = -0.75
+PAGE_RANK_FACTOR = 1000
+HITS_AUTHORITY_FACTOR = 100
+HITS_HUB_FACTOR = 100
 DOCUMENT_PATHS = [file for dir in os.walk('developer/DEV') for file in glob(os.path.join(dir[0], '*.json'))]
 stemmer = Porter2Stemmer()
 stop_words = [
@@ -55,7 +58,7 @@ def load_index(index_num: int) -> dict[str, int]:
     return location_index
 
 
-def start_up() -> list[dict[str, int]]:
+def start_up() -> tuple:
     """Loads each location, pageRank, and simHash indexes and returns them."""
     # Load Location Indexes
     print("Loading Location Indexes from indexIndex...")
@@ -81,8 +84,22 @@ def start_up() -> list[dict[str, int]]:
     with open(f'./docHashes/hashIndex.json', 'r') as json_file:
         sim_hash_index = json.load(json_file)
     print("\tFinished")
+
+    # Load token_idf_index
+    print("Loading tokenIdfIndex Index...")
+    with open(f'./tokenIdfIndex/tokenIdf.pickle', 'rb') as pickle_file:
+        token_idf_index = pickle.load(pickle_file)
+    print("\tFinished")
+
+    # Load webGraph
+    print("Loading Web Graph...")
+    with open(f'./webGraph/webGraph.pickle', 'rb') as pickle_file:
+        web_graph = Graph()
+        web_graph.nodes = pickle.load(pickle_file)
+        web_graph.convertGraphForLoading()
+    print("\tFinished")
     
-    return location_index_0, location_index_1, location_index_2, location_index_3, location_index_4, page_rank_index, sim_hash_index
+    return location_index_0, location_index_1, location_index_2, location_index_3, location_index_4, page_rank_index, sim_hash_index, token_idf_index, web_graph
 
 
 def askUser()->str:
@@ -90,6 +107,19 @@ def askUser()->str:
     print("==========  Welcome to GHoogle!  ==========\n")
     query = input("What do you want to know? ('quit' to exit): ")
     return query
+
+
+def tokenize(file_content) -> list[str]:
+    """Tokenizes file_content and returns tokens in list including bigrams and trigrams."""
+    tokens = singleTokenize(file_content)
+    num_single_tokens = len(tokens)
+    if num_single_tokens < 2:
+        return tokens, num_single_tokens
+    if num_single_tokens < 3:
+        tokens.append(tokens[0] + ' ' + tokens[1])
+        return tokens, num_single_tokens
+    tokens.extend(nGramTokenize(tokens))
+    return tokens, num_single_tokens
 
 
 def getPostings(tokens: list) -> dict[list[list]]:
@@ -102,28 +132,35 @@ def getPostings(tokens: list) -> dict[list[list]]:
     return all_postings
 
 
-def getCombinedPostings(first_word, second_word, postings):
+def getCombinedPostings(postings, distance, first_word, second_word):
     """Returns postings that contain both words."""
     first_word_postings = postings[first_word]
     second_word_postings=  postings[second_word]
-    common_docIDs = set([posting[0] for posting in first_word_postings]).intersection(set([posting[0] for posting in second_word_postings]))
-    first_word_common_postings = [posting for posting in first_word_postings if posting[0] in common_docIDs]
-    seecond_word_common_postings = [posting for posting in second_word_postings if posting[0] in common_docIDs]
-    combinedPostings = []
-    for i in range(len(first_word_common_postings)):
-        combinedPostings.append((first_word_common_postings[i], seecond_word_common_postings[i]))
-    return combinedPostings
-        
+    first_pos = 0
+    second_pos = 0
+    first_id = first_word_postings[first_pos][0]
+    second_id = second_word_postings[second_pos][0]
+    max_id = min(first_word_postings[-1][0], second_word_postings[-1][0])
+    n_gram_postings = []
 
-def filterNGramPostings(postings, distance, first_word, second_word):
-    filtered_postings = []
-    for first_posting, second_posting in postings:
-        for first__word_position in first_posting[2]:
-            second_word_position = first__word_position + distance
-            if second_word_position in second_posting[2]:
-                filtered_postings.append((first_posting, second_posting))
-                break
-    return filtered_postings
+    while first_id < max_id and second_id < max_id:
+        if second_id < first_id:
+            second_pos += 1
+            second_id = second_word_postings[second_pos][0]
+        elif first_id < second_id:
+            first_pos += 1
+            first_id = first_word_postings[first_pos][0]
+        else:
+            for first_word_position in first_word_postings[first_pos][2]:
+                second_word_position = first_word_position + distance
+                if second_word_position in second_word_postings[second_pos][2]:
+                    n_gram_postings.append((first_word_postings[first_pos], second_word_postings[second_pos]))
+                    break
+            first_pos += 1
+            first_id = first_word_postings[first_pos][0]
+            second_pos += 1
+            second_id = second_word_postings[second_pos][0]
+    return n_gram_postings
 
 
 def getNGramPostings(nGrams, postings):
@@ -132,8 +169,8 @@ def getNGramPostings(nGrams, postings):
     if nGrams:
         for nGram in nGrams:
             distance, first_word, second_word = nGram
-            combined_postings = getCombinedPostings(first_word, second_word, postings)
-            nGramPostings[nGram] = filterNGramPostings(combined_postings, distance, first_word, second_word)
+            if first_word in postings and second_word in postings:
+                nGramPostings[nGram] = getCombinedPostings(postings, distance, first_word, second_word)
     return nGramPostings
         
 
@@ -189,20 +226,15 @@ def calculateQueryNormalizedTfIdf(query_tokens: list[str], postings: list[list],
     tokens = set(query_token for query_token in query_tokens if query_token in postings and postings[query_token])
     for token in tokens:
         query_tf_wt[token] = 1 + math.log(frequencies[token], 10)
-
     # Calcualte idf
     query_idf = {}
     for token in tokens:
-        try:
-            idf = math.log(NUMBER_OF_FILES/len(postings[token]), 10)
-            print(f"Token: {token} idf: {idf}")
-            if idf > QUERY_IDF_THRESHOLD:
-                query_idf[token] = idf
-            else:
-                print(f"Excluding query term \"{token}\" becasue it's idf was too small.")
-        except:
-            print(f"TOKEN: {token}")
-            print(f"POSITNGS: {postings}")
+        query_idf[token] = token_idf_index[token]
+
+    # Only use top 20 idf's to search (for efficiency)
+    if len(query_idf) > 20:
+        for token, _ in sorted(query_idf.items(), key= lambda x: x[1], reverse=True)[10:]:
+            query_idf.pop(token)
 
     # Claculate tf-idf
     query_weights = {}
@@ -226,7 +258,6 @@ def calculateQueryNormalizedTfIdf(query_tokens: list[str], postings: list[list],
         query_idf = {}
         for nGram in nGrams:
             idf = math.log(NUMBER_OF_FILES/len(nGramPostings[nGram]), 10)
-            print(f"Token: {nGram} idf: {idf}")
             if idf > QUERY_IDF_THRESHOLD:
                 query_idf[nGram] = idf
             else:
@@ -282,65 +313,115 @@ def NGramTokenizer(query: str) -> list[tuple[int, str, str]]:
             nGrams.append((i, tokens[index], tokens[index+i]))
     return nGrams
 
-def is_similar(tokens: dict[str:int], url: str) -> bool:
-    """Checks if file tokens are similar to a previously crawled page using sim_hash."""
 
-    # Load hashed_pages dictionary
-    filepath = os.path.join(os.path.dirname(__file__), 'hashed_pages.pickle')
-    hashed_pages = load_dict_from_pickle(filepath)
-
-    # Calcualte sim_hash value of the tokens using custom sim_hash function above
-    hashed_value = sim_hash(tokens)
-    hashed_value_bits = [(hashed_value >> bit) & 1 for bit in range(32 - 1, -1, -1)] # Convert sim_hash integer to binary list
-    
-    # Iterate through previously crawled urls and their sim_hash values
-    for hashed_page_url,  value in hashed_pages.items():
-        hashed_page_value = [(value >> bit) & 1 for bit in range(32 - 1, -1, -1)]  # Convert integer sim_hash value of previously crawled url to binary list
-        
-        # Count how many bits the previously crawled sim_hash and the new sim_hash have in common.
-        # If that number is greater than 31, then return True
-        if len([bit for bit in range(32) if hashed_page_value[bit] == hashed_value_bits[bit]]) > 31: 
-            print(f"Not Includeing this because it is too similar to {hashed_page_url}")
-            return True
-    
-    # If new url is not similar to old ones then add url and its sim_hash to the hashed pages dictionary.
-    hashed_pages[url] = hashed_value
-
-    # Save updated dictionary to file.
-    save_dict_to_pickle(hashed_pages, filepath)
-    return False
+def runHits(documents):
+    start_time = time.time()
+    hits_graph = Graph()
+    for document in documents:
+        hits_graph.nodes[document] = web_graph.nodes[document]
+    for node in [node for node in hits_graph.nodes.values()]:
+        for parent in sorted([parent for parent in node.parents], key = lambda node: node.page_rank, reverse=True)[:10]:
+            hits_graph.nodes[parent.docID] = parent
+    end_time = time.time()
+    print(f"JOE Took {end_time - start_time} seconds")
+    start_time = time.time()
+    print(f"Increased to {len(hits_graph.nodes)} nodes")
+    for i in range(5):
+        hits_graph.runHits()
+    end_time = time.time()
+    print(f"McFlow Took {end_time - start_time} seconds")
+    return hits_graph
 
 
 def search(query: str) -> list[tuple[int, int]]:
     """Searches for documents that match query."""
+
     # Tokenize and stem query
-    tokenized_query = indexer.tokenize(query)
-    if len(tokenized_query) > 3:
+    start_time = time.time()
+    tokenized_query, num_single_tokens = tokenize(query)
+    if num_single_tokens > 4:
+        tokenized_query = sorted([token for token in tokenized_query if isinstance(token, str) and token in token_idf_index], key= lambda token: token_idf_index[token], reverse=True)[:10]
+    print(tokenized_query)
+    if num_single_tokens and num_single_tokens < 6:
         nGrams = NGramTokenizer(query)
     else:
         nGrams = None
+    end_time = time.time()
+    print(f"1 Took {end_time - start_time} seconds")
+    start_time = time.time()
+    
     # Remove stop words
     query_tokens = [token for token in tokenized_query if token not in stop_words]
     print(f"Stemmed to: {query_tokens}")
+    end_time = time.time()
+    print(f"2 Took {end_time - start_time} seconds")
+    start_time = time.time()
+    print(nGrams)
+    
     # Compute word frequencies of query
     frequencies, nGramFrequencies = computeQueryFrequencies(query_tokens, nGrams)
+    end_time = time.time()
+    print(f"3 Took {end_time - start_time} seconds")
+    start_time = time.time()
+    
     # Get postings of all tokens
     postings = getPostings(query_tokens)
+    end_time = time.time()
+    print(f"4 Took {end_time - start_time} seconds")
+    start_time = time.time()
     nGramPostings = getNGramPostings(nGrams, postings)
+    end_time = time.time()
+    print(f"5 Took {end_time - start_time} seconds")
+    start_time = time.time()
+    
     # Calculate tf-idf of query
     query_normalized_weights, query_nGram_normalized_weights = calculateQueryNormalizedTfIdf(query_tokens, postings, nGramPostings, frequencies, nGrams, nGramFrequencies)
+    print(query_normalized_weights, query_nGram_normalized_weights)
+    end_time = time.time()
+    print(f"6 Took {end_time - start_time} seconds")
+    start_time = time.time()
+    
     # Calculate tf-wt of documents
     document_normalized_weights = calculateDocumentNormalizedTfWt({token: posting for (token, posting) in postings.items() if token in query_normalized_weights}, {ngram:posting for (ngram, posting) in nGramPostings.items() if ngram in query_nGram_normalized_weights})
+    end_time = time.time()
+    print(f"7 Took {end_time - start_time} seconds")
+    print(f"222 Took {end_time - start_time} seconds")
+    start_time = time.time()
     # Calcualte cosine similarity values of each document
     document_scores = defaultdict(int)
     for document, token_normalized_scores in document_normalized_weights.items():
+        document_scores[document] += page_rank_index[str(document)] * PAGE_RANK_FACTOR
         for token, score in token_normalized_scores.items():
             if isinstance(token, str):
                 document_scores[document] += score * query_normalized_weights[token]
             else:
                 document_scores[document] += score * query_nGram_normalized_weights[token]
+
+    end_time = time.time()
+    print(f"8 Took {end_time - start_time} seconds")
+    start_time = time.time()
+    
     # Sort documents by score
     sorted_list_of_documents = sorted(document_scores.items(), key = lambda document: document[1], reverse=True)
+    
+    end_time = time.time()
+    start_time = time.time()
+    # Def Run Hits Algorithm on Documents Found
+    hits_graph_input = [document[0] for document in sorted_list_of_documents[:100]]
+    print(f"running hits on length {len(hits_graph_input)}")
+    hits_graph = runHits(hits_graph_input)
+    max_authority = 0
+    max_hub = 0
+    for document in hits_graph.nodes.keys():
+        document_scores[document] += hits_graph.nodes[document].authority * HITS_AUTHORITY_FACTOR + hits_graph.nodes[document].hub * HITS_HUB_FACTOR
+        if hits_graph.nodes[document].authority > max_authority:
+            max_authority = hits_graph.nodes[document].authority
+        if hits_graph.nodes[document].hub > max_hub:
+            max_hub = hits_graph.nodes[document].hub
+    print(f"Max Hub: {max_hub}")
+    print(f"Max Authority: {max_authority}")
+    end_time = time.time()
+    print(f"9 Took {end_time - start_time} seconds")
     return sorted_list_of_documents
 
 
@@ -363,7 +444,7 @@ def getTopKUrls(documents: list[tuple[int, int]], k: int) -> list[tuple[int, str
 if __name__ == '__main__':
     # Load location indexes into memory
     print("Starting Up")
-    location_index_0, location_index_1, location_index_2, location_index_3, location_index_4, page_rank_index, sim_hash_index = start_up()
+    location_index_0, location_index_1, location_index_2, location_index_3, location_index_4, page_rank_index, sim_hash_index, token_idf_index, web_graph = start_up()
     print("Done")
 
     # Start search engine loop in command line
@@ -380,6 +461,6 @@ if __name__ == '__main__':
 
         # Print Results
         print("================  Results  ================\n")
-        # for document_info in urls:
-            # print(document_info)
+        for document_info in urls:
+            print(document_info['url'])
         print(f"\nFound {len(sorted_postings)} results in {end_time - start_time} seconds\n")

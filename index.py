@@ -56,7 +56,7 @@ class Graph:
     """Graph of entire courpus."""
     def __init__(self) -> None:
         self.nodes = {}
-    
+
 
     def addNode(self, hashed_url:int, node:object):
         self.nodes[hashed_url] = node
@@ -66,17 +66,39 @@ class Graph:
         for node in self.nodes.values():
             for child in node.children_urls:
                 if child in self.nodes:
-                    self.nodes[child].parents.append(node)
+                    self.nodes[child].parents.add(node)
         for node in self.nodes.values():
             for parent in node.parents:
-                parent.children.append(node)
+                parent.children.add(node)
+
+
+    def convertGraphForSaving(self) -> None:
+        self.nodes = {node.docID: node for node in self.nodes.values()}
+        for node in self.nodes.values():
+            for child in [node for node in node.children]:
+                node.children.remove(child)
+                node.children.add(child.docID)
+            for parent in [node for node in node.parents]:
+                node.parents.remove(parent)
+                node.parents.add(parent.docID)
+
+    
+    def convertGraphForLoading(self) -> None:
+        for node in self.nodes.values():
+            for docId in [node for node in node.children]:
+                node.children.remove(docId)
+                node.children.add(self.nodes[docId])
+            for docId in [node for node in node.parents]:
+                node.parents.remove(docId)
+                node.parents.add(self.nodes[docId])
 
 
     def runHits(self):
-        for node in self.nodes:
+        for node in self.nodes.values():
             node.updateAuthority()
-        for node in self.nodes:
+        for node in self.nodes.values():
             node.updateHub()
+        self.normalize_nodes()
 
 
     def runPageRank(self, d):
@@ -85,11 +107,20 @@ class Graph:
 
 
     def normalize_nodes(self) -> None:
-        authority_sum = sum(node.auth for node in self.nodes)
-        hub_sum = sum(node.hub for node in self.nodes)
-        for node in self.nodes:
-            node.authority /= authority_sum
-            node.hub /= hub_sum
+        authority_sum = sum(node.authority for node in self.nodes.values())
+        hub_sum = sum(node.hub for node in self.nodes.values())
+        for node in self.nodes.values():
+            if authority_sum:
+                node.authority /= authority_sum
+            if hub_sum:
+                node.hub /= hub_sum
+
+    
+    def save(self):
+        self.convertGraphForSaving()
+        with open(f'webGraph/webGraph.pickle', 'wb') as web_graph_file:
+            pickle.dump(self.nodes, web_graph_file, pickle.HIGHEST_PROTOCOL)
+        print("\tSaved Web Graph")
     
 
 
@@ -97,9 +128,9 @@ class Node:
     """Node representation of document in corupus."""
     def __init__(self, hashed_url: int, docID: int) -> None:
         self.url = hashed_url
-        self.children_urls = []
-        self.children = []
-        self.parents = []
+        self.children_urls = set()
+        self.children = set()
+        self.parents = set()
         self.authority = 1.0
         self.hub = 1.0
         self.page_rank = 1.0
@@ -107,11 +138,11 @@ class Node:
 
 
     def updateAuthority(self):
-        self.auth = sum(node.hub for node in self.parents)
+        self.authority = sum(node.hub for node in self.parents)
 
 
     def updateHub(self):
-        self.hub = sum(node.auth for node in self.children)
+        self.hub = sum(node.authority for node in self.children)
 
 
     def updatePageRank(self, damping_factor, n):
@@ -194,6 +225,28 @@ def simHash(tokens: dict[str:int]) -> int:
     return integer # Return integer representation of hashed value
 
 
+def isSimilar(frequencies: dict[str:int]) -> bool:
+    """Checks if file tokens are similar to a previously crawled page using sim_hash."""
+
+    # Calcualte sim_hash value of the tokens using custom sim_hash function above
+    hashed_value = simHash(frequencies)
+    
+    # Iterate through previously crawled documents and their sim_hash values
+    for docId, value in sim_hashes.items():
+        
+        # Count how many bits the previously crawled sim_hash and the new sim_hash have in common.
+        # If that number is greater than 31, then return True
+        if bin(hashed_value ^ value).count("1") > 31: 
+            print(f"Not Includeing doc {current_id} because it is too similar to doc {docId}")
+            print(DOCUMENT_PATHS[current_id])
+            print(DOCUMENT_PATHS[docId])
+            return True
+    
+    # If new document is not similar to old ones then add document and its sim_hash to the hashed pages dictionary.
+    sim_hashes[current_id] = hashed_value
+    return False
+
+
 def saveHashes(index: dict[str, list]) -> None:
     """Dump hash dictionary to json file."""
     with open(f'./docHashes/hashIndex.json', 'w') as json_file:
@@ -215,6 +268,13 @@ def indexFile(file: str):
     with open(file) as json_file:
         file_data = json.load(json_file)
         soup = BeautifulSoup(file_data['content'], 'lxml')
+
+        tokens = tokenize(soup.get_text())
+        frequencies = countFrequencyAndPosition(tokens)
+
+        if isSimilar(frequencies):
+            return
+        
         headers = set()
         for header1 in soup.find_all('h1'):
             for header in tokenize(header1.text):
@@ -239,8 +299,7 @@ def indexFile(file: str):
             for title in tokenize(title_tags.text):
                 titles.add(title)
 
-        tokens = tokenize(soup.get_text())
-        frequencies = countFrequencyAndPosition(tokens)
+
         for token, (freq, positions) in frequencies.items():
             isTitle = False
             isBold = False
@@ -253,12 +312,10 @@ def indexFile(file: str):
                 isHeader = True
             main_index[token].append((current_id, freq, positions, isTitle, isBold, isHeader))
 
-        sim_hashes[current_id] = simHash(frequencies)
-
         node = Node(hash(file_data['url']), current_id)
         for link in soup.find_all('a'): # Iterate thorugh a tags in soup
             if link and link.get('href'): # Get url from link
-                node.children_urls.append(hash(urljoin(file_data['url'], link.get('href')))) # Convert relative url to absolute url and append it to links list
+                node.children_urls.add(hash(urljoin(file_data['url'], link.get('href')))) # Convert relative url to absolute url and append it to links list
         webGraph.addNode(node.url, node)
 
 ###################################################################
@@ -268,8 +325,6 @@ def indexFile(file: str):
 if __name__=='__main__':
     webGraph = Graph()
     for index, (subdir, dirs, files) in enumerate(os.walk('./developer/DEV')):
-        if index > 7:
-            break
         print(subdir)
         for file in tqdm(files):
             indexFile(subdir + '/' + file)
@@ -283,9 +338,10 @@ if __name__=='__main__':
         print(f"{datetime.datetime.now()} Started PageRank Iteration {i} of 5")
         webGraph.runPageRank(0.85)
         print(f"{datetime.datetime.now()} Finished Iteration")
-    savePageRanks({node.docID:node.page_rank for node in webGraph.nodes.values()})
     print(current_id)
     dumpToPickle(main_index, file_number)
     saveHashes(sim_hashes)
+    savePageRanks({node.docID:node.page_rank for node in webGraph.nodes.values()})
+    webGraph.save()
     merge()
     createFinalIndex()

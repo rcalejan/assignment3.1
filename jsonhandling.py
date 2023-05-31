@@ -7,11 +7,14 @@ import json
 import pickle
 import os
 import datetime
+import math
 
 ###################################################################
 #                          Constants                              #
 ###################################################################
 current_file = 1
+NUMBER_OF_FILES = 55393
+
 
 ###################################################################
 #                          Functions                              #
@@ -93,21 +96,27 @@ def merge() -> None:
 
 def createFinalIndex() -> None:
     """Merge all master indexes into final Indexes while creating location indexes for each final index."""
-    for master_index in range(5):
-        print(f"Working on index: {master_index}")
-        with open(f'./masterIndex/index{master_index}.json', 'r') as json_file:
+    token_idf_index = {}
+    for i in range(5):
+        print(f"Working on index: {i}")
+        with open(f'./masterIndex/index{i}.json', 'r') as json_file:
             partial_index = json.load(json_file)
         print("\tLoaded partial index from masterIndex")
+        print(f"Updating token_idf_index...")
+        for token, postings_list in partial_index.items():
+            token_idf_index[token] = math.log(NUMBER_OF_FILES/len(postings_list), 10)
         print("\tCreating final_index and index_index...")
-        with open(f'finalIndex/index{master_index}.json', 'w') as final_index_file:
+        with open(f'finalIndex/index{i}.json', 'w') as final_index_file:
             index_dict = {}
-            for token, postingsList in partial_index.items():
+            for token, postings_list in partial_index.items():
                 start_postion = final_index_file.tell()
-                json.dump({token:postingsList}, final_index_file)
+                json.dump({token:postings_list}, final_index_file)
                 end_position = final_index_file.tell()
                 index_dict[token] = (start_postion, end_position)
         print("\tFinished")
-        with open(f'./indexIndex/index{master_index}.pickle', 'wb') as index_file:
+        with open(f'./indexIndex/index{i}.pickle', 'wb') as index_file:
             pickle.dump(index_dict, index_file, pickle.HIGHEST_PROTOCOL)
         print("\tSaved index_index")
-        print("\tComplete")
+    with open(f'./tokenIdfIndex/tokenIdf.pickle', 'wb') as index_file:
+        pickle.dump(token_idf_index, index_file, pickle.HIGHEST_PROTOCOL)
+    print("\tComplete")
