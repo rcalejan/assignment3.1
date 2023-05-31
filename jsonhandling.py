@@ -14,7 +14,7 @@ import math
 ###################################################################
 current_file = 1
 NUMBER_OF_FILES = 55393
-
+PAGE_RANK_FACTOR = 1000
 
 ###################################################################
 #                          Functions                              #
@@ -97,6 +97,11 @@ def merge() -> None:
 def createFinalIndex() -> None:
     """Merge all master indexes into final Indexes while creating location indexes for each final index."""
     token_idf_index = {}
+    # Load PageRank dictinoary
+    print("Loading PageRanks Index...")
+    with open(f'./pageRanks/pageRankIndex.json', 'r') as json_file:
+        page_rank_index = json.load(json_file)
+    print("\tFinished")
     for i in range(5):
         print(f"Working on index: {i}")
         with open(f'./masterIndex/index{i}.json', 'r') as json_file:
@@ -109,10 +114,13 @@ def createFinalIndex() -> None:
         with open(f'finalIndex/index{i}.json', 'w') as final_index_file:
             index_dict = {}
             for token, postings_list in partial_index.items():
+                postings_list = sorted(postings_list, key=lambda posting: posting[1] + PAGE_RANK_FACTOR * page_rank_index[str(posting[0])])
                 start_postion = final_index_file.tell()
-                json.dump({token:postings_list}, final_index_file)
-                end_position = final_index_file.tell()
-                index_dict[token] = (start_postion, end_position)
+                json.dump(postings_list[:100], final_index_file)
+                first_hundred_end_position = final_index_file.tell()
+                json.dump(postings_list[100:], final_index_file)
+                real_end_position = final_index_file.tell()
+                index_dict[token] = (start_postion, first_hundred_end_position, real_end_position)
         print("\tFinished")
         with open(f'./indexIndex/index{i}.pickle', 'wb') as index_file:
             pickle.dump(index_dict, index_file, pickle.HIGHEST_PROTOCOL)

@@ -174,7 +174,7 @@ def getNGramPostings(nGrams, postings):
     return nGramPostings
         
 
-def findPostings(token: str) -> list:
+def findPostings(token: str, first_hundred = True) -> list:
     """Finds postings in file and returns it as a list."""
 
     # Find which final index and location index to use
@@ -196,14 +196,23 @@ def findPostings(token: str) -> list:
 
     # Find start and end positions of token in file
     try:
-        start_position, end_position = index_to_use[token]  # Get start and end position of json list in file
+        start_position, hundred_end_postiion, end_position = index_to_use[token]  # Get start and end position of json list in file
     except KeyError:
         return []    # if token wasn't found return empty list
-    with open(f'./finalIndex/index{index_num}.json', 'r') as final_index:
-        final_index.seek(start_position)    # Jump to file start position
-        posting_data = final_index.read(end_position-start_position)    # Read object string
-    postings = orjson.loads(posting_data)    # Load json string into dictionary
-    return postings[token]
+    if first_hundred:
+        with open(f'./finalIndex/index{index_num}.json', 'r') as final_index:
+            final_index.seek(start_position)    # Jump to file start position
+            posting_data = final_index.read(hundred_end_postiion-start_position)    # Read object string
+        postings = orjson.loads(posting_data)    # Load json string into dictionary
+    else:
+        with open(f'./finalIndex/index{index_num}.json', 'r') as final_index:
+            final_index.seek(start_position)    # Jump to file start position
+            posting_data = final_index.read(hundred_end_postiion-start_position)    # Read object string
+            postings = orjson.loads(posting_data)    # Load json string into dictionary
+            final_index.seek(hundred_end_postiion+1)
+            posting_data = final_index.read(end_position-hundred_end_postiion+1)    # Read object string
+            postings.extend(orjson.loads(posting_data))
+    return postings
 
 
 def computeQueryFrequencies(tokens: list[str], nGrams: list[tuple[int, str, str]]) -> tuple[dict[str, int], dict[tuple, int]]:
