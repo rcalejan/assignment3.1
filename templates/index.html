@@ -2,17 +2,19 @@
 <html>
 <head>
   <title>Search Engine</title>
-  <link rel="stylesheet" type="text/css" href="styles.css">
+  <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
   <div class="container">
     <h1>Search Engine</h1>
     <div class="search-container">
       <input type="text" id="searchInput" placeholder="Enter your search query">
-      <button onclick="search()">Search</button>
+      <button id = "searchButton">Search</button>
     </div>
     <div id="resultsContainer"></div>
+    <div id="time"></div>
   </div>
-  <script src="script.js"></script>
 </body>
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+
 </html>

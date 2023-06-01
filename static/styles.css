@@ -25,6 +25,10 @@ button {
   font-size: 16px;
 }
 
+#time{
+  text-align: center;
+}
+
 #resultsContainer {
   margin-top: 20px;
 }
@@ -42,3 +46,4 @@ button {
 .result p {
   margin-top: 5px;
 }
+
