@@ -13,6 +13,7 @@ from glob import glob
 import json
 import orjson
 import time
+from bs4 import BeautifulSoup
 from jsonhandling import load_index, load_page_rank_index, load_token_idf_index
 from filterContent import queryTokenize
 from ngram import getNGramPostings, getPostingsForNGram, NGramTokenizer
@@ -227,7 +228,8 @@ def getTopKUrls(documents: list[tuple[int, int]], k: int) -> list[tuple[int, str
         doc_path = DOCUMENT_PATHS[documentid]
         with open(doc_path, 'r') as file:
             data = json.load(file)
-            urls.append(data['url'])
+            soup = BeautifulSoup(data['content'], 'lxml')
+            urls.append((data['url'], summarizePage(soup.get_text())))
     return urls
 
 
@@ -240,7 +242,6 @@ def mainPage():
 @app.route('/api')
 def searchQuery():
     """Return results of query"""
-    print("SDSDFSFD")
     query = request.args.get('query')
     # Keep track of when index started
     start_time = time.time()
@@ -250,7 +251,7 @@ def searchQuery():
     sorted_postings = search(query)  
 
     # Get Top 10 Url's from Search
-    urls = getTopKUrls(sorted_postings, 10) 
+    urls = getTopKUrls(sorted_postings, 10)
 
     # Keep track of when seach finished
     end_time = time.time()
@@ -259,11 +260,16 @@ def searchQuery():
 
 def summarizePage(page):
     """Summarizes each result using the OpenAI API"""
-    prompt = f'Can you summarize this page in less than 50 words: {page}'
+    prompt = f'Can you summarize this page in less than 50 words: {page[:500]}\n\nTl;dr'
+    openai.api_key = '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'
     completion = openai.Completion.create(
-        engine='gpt-3.5-turbo',
-        prompt=prompt,
-        max_tokens=100,
+    model="text-ada-001",
+    prompt=prompt,
+    temperature=0.7,
+    max_tokens=60,
+    top_p=1,
+    frequency_penalty=0,
+    presence_penalty=1
     )
     return completion.choices[0].text
 
@@ -279,6 +285,7 @@ if __name__ == '__main__':
 
     # Run Flask App
     app.run(debug=True)
+
 
         
         

@@ -31,7 +31,10 @@ function displayResults(results) {
   var timeContainer = document.getElementById("time")
   timeContainer.innerHTML = `found ${num_documents} documents in ${time_taken} seconds`
   urls = results[2]
-  urls.forEach(function(url) {
+  urls.forEach(function(pair) {
+
+    var url = pair[0];
+    var summary = pair[1];
 
     var resultDiv = document.createElement("div");
     resultDiv.className = "result";
@@ -41,9 +44,13 @@ function displayResults(results) {
     link.textContent = url;
     link.target = "_blank";
 
+    var summaryPara = document.createElement("p");
+    summaryPara.textContent = summary || "No summary available";
 
     resultDiv.appendChild(link);
+    resultDiv.appendChild(summaryPara);
 
     resultsContainer.appendChild(resultDiv);
   });
+
 }
