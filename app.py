@@ -19,12 +19,12 @@ from ngram import getNGramPostings, getPostingsForNGram, NGramTokenizer
 from tfIdf import calculateDocumentNormalizedTfWt, calculateQueryNormalizedTfIdf
 import re
 from flask import Flask, render_template, request
-
-
+import openai
 ###################################################################
 #                Global Variabls and Constants                    #
 ###################################################################
 
+openai.api_key = os.getenv("OPEN_AI_KEY")
 PAGE_RANK_FACTOR = 1000
 HITS_AUTHORITY_FACTOR = 100
 HITS_HUB_FACTOR = 100
@@ -256,6 +256,16 @@ def searchQuery():
     end_time = time.time()
     return json.dumps((len(sorted_postings), end_time-start_time, urls))
     
+
+def summarizePage(page):
+    """Summarizes each result using the OpenAI API"""
+    prompt = f'Can you summarize this page in less than 50 words: {page}'
+    completion = openai.Completion.create(
+        engine='gpt-3.5-turbo',
+        prompt=prompt,
+        max_tokens=100,
+    )
+    return completion.choices[0].text
 
 ###################################################################
 #                             Main                                #
