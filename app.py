@@ -162,14 +162,12 @@ def computeQueryFrequencies(tokens: list[str], nGrams: list[tuple[int, str, str]
 
 def search(query: str) -> list[tuple[int, int]]:
     """Searches for documents that match query."""
-
     # Tokenize and stem query
     tokenized_query, num_single_tokens = queryTokenize(query)
 
     # Only use top 10 tokens by idf for efficient retrieval
     if num_single_tokens > 4:
         tokenized_query = sorted([token for token in tokenized_query if isinstance(token, str) and token in token_idf_index], key= lambda token: token_idf_index[token], reverse=True)[:10]
-    print(tokenized_query)
 
     # If the length of the query is greater than six then don't use NGrams for indexing because the current tokens perform better
     if num_single_tokens and num_single_tokens < 6:
@@ -179,17 +177,17 @@ def search(query: str) -> list[tuple[int, int]]:
 
     # Remove stop words
     query_tokens = [token for token in tokenized_query if token not in stop_words]
-    
+
     # Compute word frequencies of query
     frequencies, nGramFrequencies = computeQueryFrequencies(query_tokens, nGrams)
-    
+
     # Get postings of all tokens
     postings = getPostings(query_tokens)
     nGramPostings = getNGramPostings(nGrams, postings)
 
     # Calculate tf-idf of query
     query_normalized_weights, query_nGram_normalized_weights = calculateQueryNormalizedTfIdf(query_tokens, postings, nGramPostings, frequencies, nGrams, nGramFrequencies, token_idf_index)
-    
+
     # Calculate tf-wt of documents
     document_normalized_weights = calculateDocumentNormalizedTfWt({token: posting for (token, posting) in postings.items() if token in query_normalized_weights}, {ngram:posting for (ngram, posting) in nGramPostings.items() if ngram in query_nGram_normalized_weights})
 
@@ -202,7 +200,7 @@ def search(query: str) -> list[tuple[int, int]]:
                 document_scores[document] += score * query_normalized_weights[token]
             else:
                 document_scores[document] += score * query_nGram_normalized_weights[token]
-    
+
     # Sort documents by score
     sorted_list_of_documents = sorted(document_scores.items(), key = lambda document: document[1], reverse=True)
 
@@ -216,20 +214,30 @@ def search(query: str) -> list[tuple[int, int]]:
 
     # Sort Documents again
     sorted_list_of_documents = sorted(document_scores.items(), key = lambda document: document[1], reverse=True)
+
     return sorted_list_of_documents
 
 
-def getTopKUrls(documents: list[tuple[int, int]], k: int) -> list[tuple[int, str]]:
+def getTopKUrls(documents: list[tuple[int, int]], k: int, summarize: bool) -> list[tuple[int, str]]:
     """Return urls of the top k documents sorted by score."""
     urls = []
+
+    # Iterate through documents
     for index, (documentid, _) in enumerate(documents):
+        # Only iterate thorugh k documents
         if index == k:
             break
+        # Get path from docid
         doc_path = DOCUMENT_PATHS[documentid]
         with open(doc_path, 'r') as file:
+            # Load file from path
             data = json.load(file)
-            soup = BeautifulSoup(data['content'], 'lxml')
-            urls.append((data['url'], summarizePage(soup.get_text())))
+            # Sumamrize if requested
+            if summarize:
+                soup = BeautifulSoup(data['content'], 'lxml')
+                urls.append((data['url'], summarizePage(soup.get_text())))
+            else:
+                urls.append((data['url'], None))
     return urls
 
 
@@ -242,35 +250,58 @@ def mainPage():
 @app.route('/api')
 def searchQuery():
     """Return results of query"""
+    # Get arguments from request
     query = request.args.get('query')
+    summaries = request.args.get('summaries')
+
+    # Check to see if we summarize of not
+    if summaries=='true':
+        summarize = True
+    elif summaries == 'false':
+        summarize = False
+    else:
+        print("Got request: {request.url} which has an invalid summaries flag.")
+        return "Invalid Request"
+
     # Keep track of when index started
     start_time = time.time()
 
     print(f"Getting results for query: {query}")
     # Main Search
     sorted_postings = search(query)  
-
+    
     # Get Top 10 Url's from Search
-    urls = getTopKUrls(sorted_postings, 10)
+    urls = getTopKUrls(sorted_postings, 10, summarize)
 
     # Keep track of when seach finished
     end_time = time.time()
-    return json.dumps((len(sorted_postings), end_time-start_time, urls))
+    return json.dumps((len(sorted_postings), end_time-start_time, urls, summarize))
     
 
 def summarizePage(page):
     """Summarizes each result using the OpenAI API"""
-    prompt = f'Can you summarize this page in less than 50 words: {page[:500]}\n\nTl;dr'
-    openai.api_key = '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'
-    completion = openai.Completion.create(
-    model="text-ada-001",
-    prompt=prompt,
-    temperature=0.7,
-    max_tokens=60,
-    top_p=1,
-    frequency_penalty=0,
-    presence_penalty=1
-    )
+    # Prompt Open Ai to summarize first 4000 characters (approximately 1000 tokens) of page
+    prompt = f'Can you summarize this page in less than 50 words: {page[:4000]}\n\nTl;dr'
+
+    # Get OpenApi Key
+    openai.api_key = os.getenv('OPEN_API_KEY')
+    if not os.getenv('OPEN_API_KEY'):
+        print("OPEN_API_KEY ENVIRONEMNTAL VARIABLE NOT FOUND")
+        return None
+    try:
+        # Send request to open ai
+        completion = openai.Completion.create(
+        model="text-ada-001",
+        prompt=prompt,
+        temperature=0.7,
+        max_tokens=60,
+        top_p=1,
+        frequency_penalty=0,
+        presence_penalty=1
+        )
+    except openai.InvalidRequestError:
+        return None
+    # Return result
     return completion.choices[0].text
 
 ###################################################################

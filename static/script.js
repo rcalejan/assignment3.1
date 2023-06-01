@@ -2,7 +2,8 @@
 // Please let me know if you need more help with anything else.
 document.getElementById('searchButton').addEventListener('click', function() {
   var inputText = document.getElementById('searchInput').value;
-  var url = 'http://localhost:5000/api?query=' + encodeURIComponent(inputText);
+  var boxChecked = document.getElementById('summaries').checked;
+  var url = 'http://localhost:5000/api?summaries=' + encodeURIComponent(boxChecked) + '&query=' + encodeURIComponent(inputText);
   fetch(url)
   .then(function(response) {
     if (!response.ok) {
@@ -28,14 +29,15 @@ function displayResults(results) {
   }
   var num_documents = results[0]
   var time_taken = results[1]
+  var summarize = results[3]
+  console.log()
   var timeContainer = document.getElementById("time")
   timeContainer.innerHTML = `found ${num_documents} documents in ${time_taken} seconds`
   urls = results[2]
-  urls.forEach(function(pair) {
+  urls.forEach(function(posting) {
 
-    var url = pair[0];
-    var summary = pair[1];
-
+    var url = posting[0];
+    var summary = posting[1];
     var resultDiv = document.createElement("div");
     resultDiv.className = "result";
 
@@ -45,8 +47,12 @@ function displayResults(results) {
     link.target = "_blank";
 
     var summaryPara = document.createElement("p");
-    summaryPara.textContent = summary || "No summary available";
-
+    
+    if (summarize && !summary){
+      summaryPara.textContent = "Error loading summary";
+    } else {
+      summaryPara.textContent = summary;
+    }
     resultDiv.appendChild(link);
     resultDiv.appendChild(summaryPara);
 
