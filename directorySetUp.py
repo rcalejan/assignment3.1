@@ -17,7 +17,7 @@ def setUpDirectory() -> bool:
         print("Couldn't find DEV's folder at developer/DEV")
         return False
     
-    directories = ["dumps", "finalIndex", "indexIndex", "masterIndex", "pageRanks", "tokenIdfIndex", "webGraph"]
+    directories = ["dumps", "docHashes", "finalIndex", "indexIndex", "masterIndex", "pageRanks", "tokenIdfIndex", "webGraph"]
     if any(os.path.exists(directory_name) for directory_name in directories):
         answer = input("IMPORTANT: FOUND EXISTING DIRECTORIES ALREADY CREATED. ARE YOU SURE YOU WANT TO DELETE THESE DIRECTORIES AND START AGAIN? THIS WILL COMPLETELY RESET INDEXING.\n\tEnter 'yes' to proceed: ")
         if answer != 'yes':
