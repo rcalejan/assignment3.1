@@ -11,4 +11,3 @@ To index run index.py. If you have previously ran the indexer or any of the fold
 To run search engine in command line run search.py
 
 To run search engine in local webrowser run app.py and connect to localhost:5000.
-
