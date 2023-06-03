@@ -28,6 +28,7 @@ PAGE_RANK_FACTOR = 1000
 HITS_AUTHORITY_FACTOR = 100
 HITS_HUB_FACTOR = 100
 DOCUMENT_PATHS = [file for dir in os.walk('developer/DEV') for file in glob(os.path.join(dir[0], '*.json'))]
+BAD_URLS = ['https://today.uci.edu/department/information_computer_sciences?calendar=1', 'https://today.uci.edu/department/information_computer_sciences']
 stop_words = [
     'a', 'about', 'above', 'after', 'again', 'against', 'all', 'am', 'an', 'any', 'are', "aren't", 'as', 'at',
     'be', 'because', 'been', 'before', 'being', 'below', 'between', 'both', 'but', 'by', "can't", 'cannot', 'could',
@@ -94,9 +95,8 @@ def getPostings(tokens: list) -> dict[list[list]]:
     """Gets all postings for every token and n gram."""
     all_postings = defaultdict(list)  # Initialize Dictionary
     for token in set(tokens):
-        if token not in stop_words:  # If token is a stop word then don't look for it's posting
-            for new_posting in findPostings(token, championList=True): # Get champion list for tokens
-                all_postings[token].append(new_posting) # Add postings to return dictionary
+        for new_posting in findPostings(token, championList=True): # Get champion list for tokens
+            all_postings[token].append(new_posting) # Add postings to return dictionary
     return all_postings
 
 
@@ -166,7 +166,6 @@ def search(query: str) -> list[tuple[int, int]]:
     # Only use top 10 tokens by idf for efficient retrieval
     if num_single_tokens > 4:
         tokenized_query = sorted([token for token in tokenized_query if isinstance(token, str) and token in token_idf_index], key= lambda token: token_idf_index[token], reverse=True)[:10]
-    print(tokenized_query)
 
     # If the length of the query is greater than six then don't use NGrams for indexing because the current tokens perform better
     if num_single_tokens and num_single_tokens < 6:
@@ -175,11 +174,14 @@ def search(query: str) -> list[tuple[int, int]]:
         nGrams = None
 
     # Remove stop words
-    query_tokens = [token for token in tokenized_query if token not in stop_words]
-    
+    if len(tokenized_query) > 1:
+        query_tokens = [token for token in tokenized_query if token not in stop_words]
+    else:
+        query_tokens = tokenized_query
+
     # Compute word frequencies of query
     frequencies, nGramFrequencies = computeQueryFrequencies(query_tokens, nGrams)
-    
+
     # Get postings of all tokens
     postings = getPostings(query_tokens)
     nGramPostings = getNGramPostings(nGrams, postings)
@@ -219,13 +221,15 @@ def search(query: str) -> list[tuple[int, int]]:
 def getTopKUrls(documents: list[tuple[int, int]], k: int) -> list[tuple[int, str]]:
     """Return urls of the top k documents sorted by score."""
     urls = []
-    for index, (documentid, _) in enumerate(documents):
-        if index == k:
+    for documentid, _ in documents:
+        if len(urls) >= 10:
             break
         doc_path = DOCUMENT_PATHS[documentid]
         with open(doc_path, 'r') as file:
             data = json.load(file)
-            urls.append(data)
+            # Edge case check today today_uci_edu urls because they are linked to pages that don't exist anymmore and they contaiain common terms
+            if data['url'] not in BAD_URLS: 
+                urls.append(data)
     return urls
 
 ###################################################################
