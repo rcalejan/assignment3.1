@@ -53,9 +53,6 @@ def isSimilar(frequencies: dict[str:int], sim_hashes: dict, current_id: int) -> 
         # Count how many bits the previously crawled sim_hash and the new sim_hash have in common.
         # If that number is greater than 31, then return True
         if bin(hashed_value ^ value).count("1") > 31: 
-            print(f"Not Includeing doc {current_id} because it is too similar to doc {docId}")
-            print(DOCUMENT_PATHS[current_id])
-            print(DOCUMENT_PATHS[docId])
             return True
     
     # If new document is not similar to old ones then add document and its sim_hash to the hashed pages dictionary.
