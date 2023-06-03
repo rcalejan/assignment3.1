@@ -1,0 +1,20 @@
+Problem: Queries with only stop words in them found no results because we took out stop words.
+Solution: To remedy this we index the bigrams, trigrams, and ngrams (in this report ngram means a pair of words with distances longer than 2 words apart) of these queries as they are more important than the singe tokens.
+
+Problem: Long queries took a long time to compute because at first we indexed every token, bigram, trigram, and ngram.
+Solution: To fix this we only grabbed postings on the 10 most important terms based on idf.  We rewrote the indexer so it calcualtes idf as a post process to indexing and saves them to a file so we can get idf in O(1) instead of having to calculate it.  We also changed the search so ngrams wouldnt be used if the query was over a certain length.  This is because for long queries, the single tokens, bigrams and trigrams are enough to find close pages.  Also calcualting Ngram postings are time consuming.
+
+Problem: 'Cristina Lopes' and similar queries brought up many results that just had the word crsistina in them.  This was bad because these pages were often pages from eppstien/pix which had little information.
+Solution: To fix this we calcualted page rank while indexing and created champion lists of each term.  These champion lists ordered by pagerank and idf helped to bring more important pages to the top.  We also implemented HITS algorithm on a small subset of found pages to help find which pages were important.  The HITS algorithm runs during query time so we can only operate on a subset of the found pages as the algorithm is time consuming.
+
+Problem: 'Masters of software engineering' brought up pages with the terms appearing often but not the pages that were the most important.
+Solution: To fix this we used important words and kept track of bold, headers, and title words so we could find the pages that were most important.  After fixing this the top results were more important as they had the query in the title
+
+Problem: Empty queries broke our system.
+Solution: Return no urls for empty searches.
+
+Problem: Queries with one stop word in it would return zero results.
+Solution: Put an edge case where if the query is a single stop word, then index the stop word.
+
+Problem: When sumamrizing the queries the open ai api takes too long. Far longer than 300 ms.
+Solution: Have an option for getting summaries.  Allows users to choose between speed or summaries.
