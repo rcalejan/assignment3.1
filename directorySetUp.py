@@ -14,7 +14,7 @@ def setUpDirectory() -> bool:
     if os.path.exists('developer/DEV'):
         print("Using developer/DEV/* for indexing")
     else:
-        print("Couldn't find DEV's folder at developer/DEV")
+        print(f"Couldn't find DEV's folder at developer/DEV.  Please put files to be indexed inside {os.getcwd()}/developer/DEV/")
         return False
     
     directories = ["dumps", "docHashes", "finalIndex", "indexIndex", "masterIndex", "pageRanks", "tokenIdfIndex", "webGraph"]
