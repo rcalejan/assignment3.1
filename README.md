@@ -1,7 +1,7 @@
 # assignment3.1
 alberto krone-martins
 
-To index run index.py. There might be a prompt at the beginning asking you to confirm deletion of folders in directory effectively reseting your indexing.
+To index run index.py. If you have previously ran the indexer or any of the folders the indexer uses are populated, you will be prompted before the indexer clears these folders.
 
 To run search engine in command line run search.py
 
