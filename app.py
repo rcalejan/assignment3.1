@@ -30,6 +30,8 @@ PAGE_RANK_FACTOR = 1000
 HITS_AUTHORITY_FACTOR = 100
 HITS_HUB_FACTOR = 100
 DOCUMENT_PATHS = [file for dir in os.walk('developer/DEV') for file in glob(os.path.join(dir[0], '*.json'))]
+BAD_URLS = ['https://today.uci.edu/department/information_computer_sciences?calendar=1', 'https://today.uci.edu/department/information_computer_sciences']
+
 stop_words = [
     'a', 'about', 'above', 'after', 'again', 'against', 'all', 'am', 'an', 'any', 'are', "aren't", 'as', 'at',
     'be', 'because', 'been', 'before', 'being', 'below', 'between', 'both', 'but', 'by', "can't", 'cannot', 'could',
@@ -97,9 +99,8 @@ def getPostings(tokens: list) -> dict[list[list]]:
     """Gets all postings for every token and n gram."""
     all_postings = defaultdict(list)  # Initialize Dictionary
     for token in set(tokens):
-        if token not in stop_words:  # If token is a stop word then don't look for it's posting
-            for new_posting in findPostings(token, championList=True): # Get champion list for tokens
-                all_postings[token].append(new_posting) # Add postings to return dictionary
+        for new_posting in findPostings(token, championList=True): # Get champion list for tokens
+            all_postings[token].append(new_posting) # Add postings to return dictionary
     return all_postings
 
 
@@ -175,8 +176,11 @@ def search(query: str) -> list[tuple[int, int]]:
     else:
         nGrams = None
 
-    # Remove stop words
-    query_tokens = [token for token in tokenized_query if token not in stop_words]
+     # Remove stop words
+    if len(tokenized_query) > 1:
+        query_tokens = [token for token in tokenized_query if token not in stop_words]
+    else:
+        query_tokens = tokenized_query
 
     # Compute word frequencies of query
     frequencies, nGramFrequencies = computeQueryFrequencies(query_tokens, nGrams)
@@ -225,19 +229,21 @@ def getTopKUrls(documents: list[tuple[int, int]], k: int, summarize: bool) -> li
     # Iterate through documents
     for index, (documentid, _) in enumerate(documents):
         # Only iterate thorugh k documents
-        if index == k:
+        if len(urls) >= k:
             break
         # Get path from docid
         doc_path = DOCUMENT_PATHS[documentid]
         with open(doc_path, 'r') as file:
             # Load file from path
             data = json.load(file)
-            # Sumamrize if requested
-            if summarize:
-                soup = BeautifulSoup(data['content'], 'lxml')
-                urls.append((data['url'], summarizePage(soup.get_text())))
-            else:
-                urls.append((data['url'], None))
+            # Edge case check today today_uci_edu urls because they are linked to pages that don't exist anymmore and they contaiain common terms
+            if data['url'] not in BAD_URLS: 
+                # Sumamrize if requested
+                if summarize:
+                    soup = BeautifulSoup(data['content'], 'lxml')
+                    urls.append((data['url'], summarizePage(soup.get_text())))
+                else:
+                    urls.append((data['url'], None))
     return urls
 
 

@@ -87,7 +87,7 @@ def start_up() -> tuple:
 def askUser()->str:
     """Prompts User for query and returns input string"""
     print("==========  Welcome to GHoogle!  ==========\n")
-    query = input("What do you want to know? ('quit' to exit): ")
+    query = input("What do you want to know? ('exit' to exit): ")
     return query
 
 
@@ -222,7 +222,8 @@ def getTopKUrls(documents: list[tuple[int, int]], k: int) -> list[tuple[int, str
     """Return urls of the top k documents sorted by score."""
     urls = []
     for documentid, _ in documents:
-        if len(urls) >= 10:
+        # Only iterate thorugh k documents
+        if len(urls) >= k:
             break
         doc_path = DOCUMENT_PATHS[documentid]
         with open(doc_path, 'r') as file:

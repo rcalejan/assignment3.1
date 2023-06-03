@@ -3,7 +3,7 @@
 document.getElementById('searchButton').addEventListener('click', function() {
   var inputText = document.getElementById('searchInput').value;
   var boxChecked = document.getElementById('summaries').checked;
-  var url = 'http://localhost:5000/api?summaries=' + encodeURIComponent(boxChecked) + '&query=' + encodeURIComponent(inputText);
+  var url = window.location.href + '/api?summaries=' + encodeURIComponent(boxChecked) + '&query=' + encodeURIComponent(inputText);
   fetch(url)
   .then(function(response) {
     if (!response.ok) {
